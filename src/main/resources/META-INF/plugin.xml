@@ -57,6 +57,12 @@
                         groupName="MVEL" 
                         enabledByDefault="true"
                         implementationClass="com.mvel.linter.inspections.MvelBestPracticeInspection"/>
+        
+        <localInspection language="MVEL" shortName="MvelJavaCodeBlock" 
+                        displayName="MVEL Java Code Block Validation" 
+                        groupName="MVEL" 
+                        enabledByDefault="true"
+                        implementationClass="com.mvel.linter.inspections.MvelJavaCodeBlockInspection"/>
     </extensions>
 
     <actions>

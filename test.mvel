@@ -44,3 +44,22 @@ items == empty
 // Null check
 value == null
 
+// Test @code{} block with missing semicolon
+@code{
+    int x = 10
+    String name = "test"
+}
+
+// Test @code{} block with proper syntax
+@code{
+    int y = 20;
+    String value = "hello";
+}
+
+// Test @code{} block with nested braces
+@code{
+    if (x > 0) {
+        System.out.println("positive");
+    }
+}
+

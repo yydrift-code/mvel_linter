@@ -1,0 +1,137 @@
+@comment{
+
+    TITLE        : HRIS_GHOR.CSV
+    AUTHOR       : Yauheni Yukhneuski
+    VERSION      : 1.0
+    TYPE         : REPORT
+    FORMAT       : CSV
+    DEPENDENCIES : REPORT_LIB
+
+    CREATE DATE  : 14/09/2022
+
+}@includeNamed{"REPORT_LIB"}@code{
+
+
+    /**************************************************************************************/
+    // IMPORTS
+    /**************************************************************************************/
+
+
+    import java.math.BigDecimal;
+    import java.util.LinkedHashMap;
+
+
+    /**************************************************************************************/
+    // CONSTANTS
+    /**************************************************************************************/
+
+
+    UTF_BOM = "\uFEFF";
+
+
+    /**************************************************************************************/
+    // PROCESSORS
+    /**************************************************************************************/
+
+
+    addProcessor("contractHours", def (variables, value) {
+        flatten = variables["flatten"];
+        effectiveDate = variables["effectiveDate"];
+
+        if (flatten == null || effectiveDate == null) {
+            return null;
+        }
+
+        workTimePeriod = getFlattenFieldData(flatten, effectiveDate, "WorkTimePeriod", "value");
+        fullTimeWorkingHours = getFlattenFieldData(flatten, effectiveDate, "FullTimeWorkingHours", "value");
+
+        if (fullTimeWorkingHours == empty && workTimePeriod == empty) {
+            return null;
+        }
+
+        if (workTimePeriod == empty) {
+            workTimePeriod = "";
+        }
+
+        if (fullTimeWorkingHours == empty) {
+            fullTimeWorkingHours = "";
+        }
+
+        return fullTimeWorkingHours + " Per " + workTimePeriod;
+    });
+
+
+    /**************************************************************************************/
+    // POST PROCESSORS
+    /**************************************************************************************/
+
+
+    addPostProcessor("contractEndDate", def (value) {
+        if (value == empty) {
+            return null;
+        }
+
+        return utils.formatDate(value, "dd/MM/yyyy");
+    });
+
+    addPostProcessor("contractBeginDate", def (value) {
+        if (value == empty) {
+            return null;
+        }
+
+        return utils.formatDate(value, "dd/MM/yyyy");
+    });
+
+
+    /**************************************************************************************/
+    // MAIN
+    /**************************************************************************************/
+
+
+    payArray = api.repository.getPayArrays(CLI_REG_ID, env.reportName);
+
+    updateColumnsDefinitionsByPayArray(payArray);
+    updateColumnsDataDefinitionsByPayArray(payArray);
+
+    contracts = api.ga20.getContractsByDates(MIN_DATE, MAX_DATE);
+
+    if (contracts != empty) {
+        activeContractsByEmployeeId = new LinkedHashMap();
+
+        for (contract: contracts) {
+            employeeId = contract.getEmployeeId();
+            contractEndDate = contract.getEndDate();
+            contractBeginDate = contract.getBeginDate();
+
+            if (contractBeginDate.compareTo(NOW_DATE) <= 0 && contractEndDate.compareTo(NOW_DATE) >= 0) {
+                if (!activeContractsByEmployeeId.containsKey(employeeId) || contract.getMainContract()) {
+                    activeContractsByEmployeeId.put(employeeId, contract);
+                }
+            }
+        }
+
+        for (contract: activeContractsByEmployeeId.values()) {
+            contractId = contract.getId();
+            contractEndDate = contract.getEndDate();
+            contractEffectiveDate = NOW_DATE;
+
+            if (contractEndDate.compareTo(contractEffectiveDate) < 0) {
+                contractEffectiveDate = contractEndDate;
+            }
+
+            contractFlatten = api.ga20.getContractFlatten(contractId);
+
+            if (contractFlatten != empty) {
+                addVariable("flatten", contractFlatten);
+                addVariable("effectiveDate", contractEffectiveDate);
+
+                createColumnsRows(processColumnsData());
+            }
+        }
+    }
+
+
+    /**************************************************************************************/
+    // END MAIN
+    /**************************************************************************************/
+}@{UTF_BOM}@foreach{columnName: getColumnNames()}@{columnName}@end{";"}@foreach{row : getReportRows()}@{"\r\n"}@{row}@end{}

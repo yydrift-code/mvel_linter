@@ -1,0 +1,800 @@
+// REPORT TITLE : Zeeman_Mini_Master_Data_ZIP
+/**************************************************************************************/
+// V1.0 DATE   : 30/03/2021
+// AUTHOR      : Yauheni Yukhneuski
+// UPDATE DATE : 06/05/2021
+// VERSION     : V1.0
+// DESCRIPTION : REPORT
+// FORMAT      : CSV
+/**************************************************************************************/
+// REPORT DEPENDENCIES : CSV REPORT
+/**************************************************************************************/
+
+
+/**************************************************************************************/
+// IMPORTS
+/**************************************************************************************/
+
+
+import java.text.DecimalFormat;
+import java.util.*;
+import java.math.*;
+
+
+/**************************************************************************************/
+// PRIVATE VARIABLES
+/**************************************************************************************/
+
+
+_managersFlattensCache = new HashMap();
+
+def getEmployeeManagers(employeeId, effectiveDate) {
+    result = [
+        "1" : "",
+        "2" : "",
+        "3" : ""
+    ];
+
+    if (employeeId == empty || effectiveDate == empty) {
+        return result;
+    }
+
+    data = api.ga.getEmployeeManagers(employeeId, effectiveDate);
+
+    if (data == empty) {
+        return result;
+    }
+
+    managers = data.HierarchicalOrganization;
+
+    if (managers == empty) {
+        return result;
+    }
+
+    foundManagers = new TreeMap(Collections.reverseOrder());
+
+    for (manager : managers) {
+        managerContractId = manager["id"];
+
+        if (managerContractId != empty) {
+            managerFlatten = _managersFlattensCache[managerContractId];
+
+            if (!_managersFlattensCache.containsKey(managerContractId)) {
+                managerFlatten = api.ga20.getContractFlatten(managerContractId);
+                _managersFlattensCache.put(managerContractId, managerFlatten);
+            }
+
+            if (managerFlatten != empty) {
+                managerEmployeeId = managerFlatten.getAt("cliEmp.otherid1", effectiveDate);
+                managerWorkingTime = managerFlatten.getAt("FullTimeWorkingHours", effectiveDate);
+
+                if (managerEmployeeId != null) {
+                    managerEmployeeId = managerEmployeeId.getValue();
+                }
+
+                if (managerWorkingTime != null) {
+                    managerWorkingTime = managerWorkingTime.getValue();
+                }
+
+                if (managerEmployeeId != empty) {
+                    managerEmployeeId = managerEmployeeId.trim();
+
+                    if (managerWorkingTime == empty) {
+                        managerWorkingTime = BigDecimal.ZERO;
+                    } else {
+                        managerWorkingTime = new BigDecimal(managerWorkingTime.replace(",", "."));
+                    }
+
+                    managerEmployeeIds = foundManagers[managerWorkingTime];
+
+                    if (managerEmployeeIds == empty) {
+                        managerEmployeeIds = new TreeSet();
+                        foundManagers.put(managerWorkingTime, managerEmployeeIds);
+                    }
+
+                    if (managerEmployeeId.matches("\\d+")) {
+                        managerEmployeeIds.add(Integer.parseInt(managerEmployeeId));
+                    }
+                }
+            }
+        }
+    }
+
+    for (managerEmployeeIds : foundManagers.values()) {
+        for (managerEmployeeId : managerEmployeeIds) {
+            managerEmployeeId1 = result["1"];
+            managerEmployeeId2 = result["2"];
+            managerEmployeeId3 = result["3"];
+
+            if (managerEmployeeId1 == empty) {
+                result.put("1", managerEmployeeId.toString());
+            } else if (managerEmployeeId2 == empty) {
+                result.put("2", managerEmployeeId.toString());
+            } else if (managerEmployeeId3 == empty) {
+                result.put("3", managerEmployeeId.toString());
+            }
+        }
+    }
+
+    return result;
+}
+
+ENTITY_DATA_DEFINITIONS = [
+    "Job": [
+        "treeName" : "Jobs",
+        "value" : "Jobs.JobCode",
+        "transId" : "Jobs.Name",
+        "groupName" : "JobIdentification"
+    ],
+    "Establishment" : [
+        "treeName" : "LegalOrganization",
+        "value" : "LegalOrganization.ID",
+        "transId" : "LegalOrganization.Establishment.Name",
+        "groupName" : "EstablishmentIdentification"
+    ],
+    "Organization" : [
+        "treeName" : "Organization",
+        "value" : "Organization.ID",
+        "transId" : "Organization.Name",
+        "groupName" : "OrganizationIdentification"
+    ],
+    "ContractTypologyBE1" : [
+        "treeName" : "ContractTypologyBE",
+        "value" : "ContractTypologyBE.Desc1",
+        "transId" : "ContractTypologyBE.Desc1",
+        "groupName" : "ContractTypologyBEIdentification1"
+    ],
+    "ContractTypologyBE5" : [
+        "treeName" : "ContractTypologyBE",
+        "value" : "ContractTypologyBE.Desc5",
+        "transId" : "ContractTypologyBE.Desc5",
+        "groupName" : "ContractTypologyBEIdentification5"
+    ],
+    "ContractTypologyNL1" : [
+        "treeName" : "ContractTypologyNL",
+        "value" : "ContractTypologyNL.Desc1",
+        "transId" : "ContractTypologyNL.Desc1",
+        "groupName" : "ContractTypologyNLIdentification1"
+    ],
+    "ContractTypologyNL5" : [
+        "treeName" : "ContractTypologyNL",
+        "value" : "ContractTypologyNL.Desc5",
+        "transId" : "ContractTypologyNL.Desc5",
+        "groupName" : "ContractTypologyNLIdentification5"
+    ]
+];
+
+
+/**************************************************************************************/
+// FUNCTIONS
+/**************************************************************************************/
+
+
+def buildRepListReportData(repListName) {
+    result = new StringBuilder("Code").append(";").append("Description");
+
+    if (repListName == empty) {
+        return result.toString();
+    }
+
+    repListBelgiumData = api.repository.regulationFlatten(1002172).repLists().byName(repListName).search();
+    repListNetherlandsData = api.repository.regulationFlatten(1001872).repLists().byName(repListName).search();
+
+    reportDataRows = new LinkedHashSet();
+
+    if (repListBelgiumData != empty) {
+        for (repListItem : repListBelgiumData) {
+            if (!repListItem.getInactive()) {
+                reportDataRows.add("\r\n" + repListItem.getValue() + ";" + repListItem.getTransId());
+            }
+        }
+    }
+
+    if (repListNetherlandsData != empty) {
+        for (repListItem : repListNetherlandsData) {
+            if (!repListItem.getInactive()) {
+                reportDataRows.add("\r\n" + repListItem.getValue() + ";" + repListItem.getTransId());
+            }
+        }
+    }
+
+    for (reportDataRow : reportDataRows) {
+        result.append(reportDataRow);
+    }
+
+    return result.toString();
+}
+
+def buildEntityTreeReportData(dataList, useLocale) {
+    result = new StringBuilder("Code").append(";");
+
+    if (useLocale) {
+        result.append("Locale").append(";");
+    }
+
+    result.append("Description");
+
+    if (dataList != empty) {
+        for (data : dataList) {
+            value = data[0] != empty ? data[0].toString() : "";
+            locale = data[2] != empty ? data[2].toString() : "";
+            transId = data[1] != empty ? data[1].toString() : "";
+
+            if (value != empty || transId != empty) {
+                result.append("\r\n").append(value).append(";");
+
+                if (useLocale) {
+                    result.append(locale).append(";");
+                }
+
+                result.append(transId);
+            }
+        }
+    }
+
+    return result.toString();
+}
+
+def getEntityTreeData(entityTypes) {
+    result = new TreeMap();
+
+    if (entityTypes == empty) {
+        return result.values();
+    }
+
+    for (entityType : entityTypes) {
+        entityDataDefinition = ENTITY_DATA_DEFINITIONS[entityType];
+
+        entityDataDefinitionValue = entityDataDefinition["value"];
+        entityDataDefinitionTransId = entityDataDefinition["transId"];
+        entityDataDefinitionTreeName = entityDataDefinition["treeName"];
+        entityDataDefinitionGroupName = entityDataDefinition["groupName"];
+
+        entityTree = api.ga20.getList("/entity/" + entityDataDefinitionTreeName + "/entity");
+
+        if (entityTree == empty) {
+            return result.values();
+        }
+
+        entityLocales = new HashMap ();
+
+        for (entityTreeItem: entityTree) {
+            if (entityTreeItem["entityLevel"].toString() == "1") {
+                entityLocales.put(entityTreeItem["path"], entityTreeItem["name"]);
+            }
+        }
+
+        for (entityTreeItem: entityTree) {
+            if (entityType == entityTreeItem["entityType"]) {
+                path = entityTreeItem["path"];
+
+                locale = "";
+
+                for (entityLocalePath: entityLocales.keySet ()) {
+                    if (path.startsWith(entityLocalePath)) {
+                        locale = entityLocales[entityLocalePath];
+                    }
+                }
+
+                for (entityGroupZones: entityTreeItem[ "data"]) {
+                    if (entityDataDefinitionGroupName == entityGroupZones["groupName"]) {
+                        groupZoneEndDate = LocalDate.parse(entityGroupZones["endDate"].toString());
+                        groupZoneBeginDate = LocalDate.parse(entityGroupZones["beginDate"].toString());
+
+                        if (NOW_DATE.compareTo(groupZoneBeginDate) >= 0 && NOW_DATE.compareTo(groupZoneEndDate) <= 0) {
+                            entityGroupZonesValues = entityGroupZones["values"];
+
+                            valueData = entityGroupZonesValues[entityDataDefinitionValue];
+                            transIdData = entityGroupZonesValues[entityDataDefinitionTransId];
+
+                            value = null;
+                            transId = null;
+
+                            if (valueData != null) {
+                                value = valueData["value"];
+                            }
+
+                            if (transIdData != null) {
+                                transId = transIdData["value"];
+                            }
+
+                            if (value != empty || transId != empty) {
+                                value = value != empty ? value : "";
+                                transId = transId != empty ? transId : "";
+
+                                result.put((value + ":" + transId + ":" + locale), { value, transId, locale });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return result.values();
+}
+
+def getContractPartner(contractId, contractEffectiveDate) {
+    result = new HashMap();
+
+    if (contractId == empty) {
+        return result;
+    }
+
+    data = api.ga20.getList("/contract/" + contract.getContractId().toString() + "/group/DependentChildren");
+
+    if (data == empty) {
+        return result;
+    }
+
+    for (item : data) {
+        valuesEndDate = item["endDate"] != empty ? LocalDate.parse(item["endDate"].toString()) : MAX_DATE;
+        valuesBeginDate = item["beginDate"] != empty ? LocalDate.parse(item["beginDate"].toString()) : MIN_DATE;
+        values = item["values"];
+
+        if (values != empty && result.isEmpty() && valuesBeginDate.compareTo(contractEffectiveDate) <= 0 && valuesEndDate.compareTo(contractEffectiveDate) >= 0) {
+            lastName = values["DependentChildrenLastName"];
+            lastNamePrefix = values["DependentChildrenLastNamePrefix"];
+            relation = values["DependentChildrenRelationWithEmployee"];
+
+            if (relation != empty && relation["value"] == "Partner") {
+                if (lastName != empty) {
+                    result.put("DependentChildrenLastName", lastName["value"]);
+                }
+                if (lastNamePrefix != empty) {
+                    result.put("DependentChildrenLastNamePrefix", lastNamePrefix["value"]);
+                }
+            }
+        }
+    }
+
+    return result;
+}
+
+
+fields = {
+    {
+        "Personnel number", "cliEmp.employeeNumber", "cliEmp.employeeNumber", true
+    },
+    {
+        "Job code", "Jobs.JobCode", "Jobs.Name", true
+    },
+    {
+        "Department code", "Organization.ID", "Organization.Name", true
+    },
+    {
+        "Entry date", "empContract.begindate", "empContract.begindate", true
+    },
+    {
+        "Exit date", "empContract.enddate", "empContract.enddate", false
+    },
+    {
+        "Reason for exit", "EndOFContractReason", "EndOFContractReason", false
+    },
+    {
+        "Gender", "Sex", "Sex", true
+    },
+    {
+        "First name(s)", "cliEmp.firstName", "cliEmp.firstName", true
+    },
+    {
+        "Usual name", "cliEmp.firstName", "cliEmp.firstName", false
+    },
+    {
+        "Initials", "Initials", "Initials", false
+    },
+    {
+        "Last name composition code", "LastNameComposition", "LastNameComposition", false
+    },
+    {
+        "Prefix maiden name", "MaidenNamePrefix", "MaidenNamePrefix", false
+    },
+    {
+        "Maiden name", "cliEmp.maidenName", "cliEmp.maidenName", false
+    },
+    {
+        "Prefix last name", "LastNamePrefix", "LastNamePrefix", false
+    },
+    {
+        "Last name", "cliEmp.lastName", "cliEmp.lastName", true
+    },
+    {
+        "Street", "AddressLine1", "AddressLine1", true
+    },
+    {
+        "House number numeric", "AddressLine2", "AddressLine2", true
+    },
+    {
+        "House number additive", "AddressLine3", "AddressLine3", false
+    },
+    {
+        "Zip code", "ZipCode", "ZipCode", true
+    },
+    {
+        "City", "City", "City", true
+    },
+    {
+        "Address country code", "Country", "Country", true
+    },
+    {
+        "Nationality", "Nationality", "Nationality", true
+    },
+    {
+        "Language", "GP_payslip_language", "GP_payslip_language", true
+    },
+    {
+        "Marital status", "MaritalStatus", "MaritalStatus", true
+    },
+    {
+        "Email-address", "BusinessEmail", "BusinessEmail", false
+    },
+    {
+        "Company code", "LegalOrganization.ID", "LegalOrganization.Establishment.Name", false
+    },
+    {
+        "Contract ID", "empContract.contractNumber", "empContract.contractNumber", true
+    },
+    {
+        "Contract type", "ContractTypologyBE.Desc1", "ContractTypologyBE.Desc1", true
+    },
+    {
+        "Contract specifics", "ContractTypologyBE.Desc5", "ContractTypologyBE.Desc5", true
+    },
+    {
+        "Salary type", "SalaryPeriod", "SalaryPeriod", false
+    },
+    {
+        "Contract hours", "PartTimeWorkingHours", "PThours", false
+    },
+    {
+        "Contract FTE percentage", "WorkTimePercentage", "WorkTimePercentage", false
+    },
+    {
+        "Country code", "empContract.cliRegID", "empContract.cliRegID", false
+    },
+    {
+        "Birth date", "cliEmp.birthDate", "cliEmp.birthDate", true
+    },
+    {
+        "Social fiscal number", "cliEmp.nationalId", "cliEmp.nationalId", false
+    },
+    {
+        "Population (2)", "ContractTypologyBE.Desc2", "ContractTypologyBE.Desc2", false
+    },
+    {
+        "Personal e-mail", "PersonalEmail", "PersonalEmail", false
+    },
+    {
+        "Termination reason for analytics", "EndOFContractReasonForAnalytics", "EndOFContractReasonForAnalytics", false
+    },
+    {
+        "Paygroup", "PayrollSets", "PayrollSets", false
+    },
+    {
+        "Business phone", "BusinessMobile", "BusinessMobile", false
+    },
+    {
+        "Home Phone", "PersonalPhone", "PersonalPhone", false
+    },
+    {
+        "Employee ID manager (1)", "managerEmployeeId1", "managerEmployeeId1", false
+    },
+    {
+        "Employee ID manager (2)", "managerEmployeeId2", "managerEmployeeId2", false
+    },
+    {
+        "Employee ID manager (3)", "managerEmployeeId3", "managerEmployeeId3", false
+    },
+    {
+        "Days per week", "Daysperweek", "Daysperweek", false
+    },
+    {
+        "Personal phone", "PersonalMobile", "PersonalMobile", false
+    },
+    {
+        "Last name Partner", "DependentChildrenLastName", "DependentChildrenLastName", false
+    },
+    {
+        "Prefix last name Partner", "DependentChildrenLastNamePrefix", "DependentChildrenLastNamePrefix", false
+    }
+};
+
+
+cCodes = [
+    1002172: "BE",
+    1002272: "DE",
+    1001772: "LU",
+    1001872: "NL",
+    1002072: "ES",
+    1001672: "FR"
+];
+
+NOW_DATE = LocalDate.now();
+MIN_DATE = LocalDate.of(1970, 1, 1);
+MAX_DATE = LocalDate.of(3000, 1, 1);
+
+columnSeparator = ";";
+timestamp = LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMddhhmmss")).toString();
+cliReg = api.ga.getReportContext().getCliRegId().toString();
+
+resultList = new ArrayList();
+
+
+//------------------------------------------------------------------------------------//
+//------------------------------------- FUNCTIONS ------------------------------------//
+//------------------------------------------------------------------------------------//
+
+def formatDate(value) {
+    if (value == empty || value.toString() == "3000-01-01" || value.toString() == "1970-01-01") {
+        return "";
+    }
+
+    return utils.formatDate(value, "yyyyMMdd");
+}
+
+def appendValue(contractElasticData, field, row, employeeManagers, contractPartner) {
+    valueName = field[1];
+    transIdName = field[2];
+
+    value = contractElasticData.get(valueName) == empty ? "" : contractElasticData.get(valueName).getValue();
+
+    if (valueName.startsWith("ContractTypologyBE") && value == empty) {
+        valueName = valueName.replace("ContractTypologyBE", "ContractTypologyNL");
+        value = contractElasticData.get(valueName) == empty ? "" : contractElasticData.get(valueName).getValue();
+    }
+
+    transId = contractElasticData.get(transIdName) == empty ? "" : contractElasticData.get(transIdName).getValue();
+
+    if (transIdName.startsWith("ContractTypologyBE") && transId == empty) {
+        transIdName = transIdName.replace("ContractTypologyBE", "ContractTypologyNL");
+        transId = contractElasticData.get(transIdName) == empty ? "" : contractElasticData.get(transIdName).getValue();
+    }
+
+    if (valueName == "DependentChildrenLastName" || valueName == "DependentChildrenLastNamePrefix") {
+        value = contractPartner.getOrDefault(valueName, "");
+    }
+
+    if (valueName == "managerEmployeeId1") {
+        value = employeeManagers != null ? employeeManagers["1"] : "";
+    } else if (valueName == "managerEmployeeId2") {
+        value = employeeManagers != null ? employeeManagers["2"] : "";
+    } else if (valueName == "managerEmployeeId3") {
+        value = employeeManagers != null ? employeeManagers["3"] : "";
+    } else if (valueName == "PayrollSets") {
+        value = contractElasticData.get(valueName) == empty ? "" : contractElasticData.get(valueName).getTransId();
+    }
+
+    if (valueName == "Daysperweek" && value != empty && value.toString().endsWith(".0")) {
+        value = value.toString().replace(".0", "");
+    }
+
+    if (value == empty) {
+        row.append("");
+    } else if (valueName == "empContract.begindate" || valueName == "empContract.enddate" || valueName == "cliEmp.birthDate") {
+        row.append(formatDate(value));
+    } else if (valueName == "GP_payslip_language") {
+        if(value == "nl-BE"){
+            row.append("NLD");
+        }else if(value == "fr-BE"){
+            row.append("FRA");
+        } else if(value == "de-DE"){
+            row.append("DEU");
+        } else{
+            row.append(value.contains("-") ? value . split ("-")[1] : "");
+        }
+    } else if (valueName == "WorkTimePercentage") {
+        row.append(new DecimalFormat ().parse(value).floatValue() / 100);
+    } else if (valueName == "empContract.cliRegID") {
+        cCode = cCodes.get(value);
+        row.append(cCode == empty ? "" : cCode);
+    } else if (transIdName == "PThours" && transId != empty) {
+        row.append(transId);
+    } else {
+        row.append(value);
+    }
+
+    row.append(columnSeparator);
+
+    return value != empty || !field[3];
+}
+
+def addRow(resultList, contractElasticData, contractEmployeeId, contractEffectiveDate) {
+    row = new StringBuilder();
+
+    contractPartner = null;
+    employeeManagers = null;
+
+    for (field: fields) {
+        if (field[1].startsWith("managerEmployee") && employeeManagers == null) {
+            employeeManagers = getEmployeeManagers(contractEmployeeId, contractEffectiveDate);
+        }
+
+        if ((field[1] == "DependentChildrenLastName" || field[1] == "DependentChildrenLastNamePrefix") && contractPartner == null) {
+            contractPartner = getContractPartner(contractElasticData.getContractId(), contractEffectiveDate);
+        }
+
+        if (!appendValue(contractElasticData, field, row, employeeManagers, contractPartner)) {
+            utils.info("'" + field[0] + "' column is empty. Skiped row: "  + row);
+            return;
+        }
+    }
+
+    resultList.add(row.toString());
+}
+
+//------------------------------------------------------------------------------------//
+//---------------------------------------- MAIN --------------------------------------//
+//------------------------------------------------------------------------------------//
+
+contractIds = new LinkedHashMap();
+
+contracts = api.ga20.getContractsAssignedTo(3000002363, LocalDate.now().minusDays(190), LocalDate.of(3000,1,1));
+
+for (contract : contracts) {
+    contractIds.put(contract.getId().toString(), contract);
+}
+
+contracts = api.ga20.getContractsAssignedTo(3000002369, LocalDate.now().minusDays(190), LocalDate.of(3000,1,1));
+
+for (contract : contracts) {
+    contractIds.put(contract.getId().toString(), contract);
+}
+
+queryBuilder = ElasticQuery
+    .builder()
+    .data("cliEmp.lastName", "LABEL")
+    .data("cliEmp.firstName", "LABEL")
+    .data("cliEmp.maidenName", "LABEL")
+    .data("cliEmp.employeeNumber", "LABEL")
+    .data("cliEmp.birthDate", "DATE")
+    .data("cliEmp.nationalId", "LABEL")
+    .data("empContract.enddate", "DATE")
+    .data("empContract.begindate", "DATE")
+    .data("empContract.cliRegID", "INTEGER")
+    .data("empContract.contractNumber", "LABEL")
+    .data("Jobs.Name", "LABEL")
+    .data("Jobs.JobCode", "LABEL")
+    .data("Organization.ID", "LABEL")
+    .data("Organization.Name", "LABEL")
+    .data("LegalOrganization.ID", "LABEL")
+    .data("LegalOrganization.Establishment.Name", "LABEL")
+    .data("EndOFContractReason", "LIST")
+    .data("Sex", "LIST")
+    .data("Initials", "LABEL")
+    .data("LastNameComposition", "LIST")
+    .data("MaidenNamePrefix", "LIST")
+    .data("LastNamePrefix", "LABEL")
+    .data("PersonalPhone", "LABEL")
+    .data("PayrollSets", "ENTITY")
+    .data("Daysperweek", "LABEL")
+    .data("Daysperweek", "DECIMAL")
+    .data("BusinessMobile", "LABEL")
+    .data("PersonalMobile", "LABEL")
+    .data("EndOFContractReasonForAnalytics", "TREE")
+    .data("PersonalEmail", "LABEL")
+    .data("City", "LABEL")
+    .data("Country", "LIST")
+    .data("ZipCode", "LABEL")
+    .data("AddressLine1", "LABEL")
+    .data("AddressLine2", "LABEL")
+    .data("AddressLine3", "LABEL")
+    .data("Nationality", "LIST")
+    .data("GP_payslip_language", "LIST")
+    .data("MaritalStatus", "LIST")
+    .data("BusinessEmail", "LABEL")
+    .data("ContractTypologyNL.Desc1", "LABEL")
+    .data("ContractTypologyNL.Desc2", "LABEL")
+    .data("ContractTypologyNL.Desc5", "LABEL")
+    .data("ContractTypologyBE.Desc1", "LABEL")
+    .data("ContractTypologyBE.Desc2", "LABEL")
+    .data("ContractTypologyBE.Desc5", "LABEL")
+    .data("SalaryPeriod", "LIST")
+    .data("PartTimeWorkingHours", "DECIMAL")
+    .data("PThours", "DECIMAL")
+    .data("WorkTimePercentage", "PERCENTAGE")
+    .data("DependentChildrenLastName/1", "LABEL")
+    .data("DependentChildrenLastNamePrefix/1", "LABEL")
+    .data("DependentChildrenRelationWithEmployee/1", "LIST")
+    .data("DependentChildrenLastName/2", "LABEL")
+    .data("DependentChildrenLastNamePrefix/2", "LABEL")
+    .data("DependentChildrenRelationWithEmployee/2", "LIST")
+    .sort("cliEmp.employeeNumber", "LABEL");
+
+contractData = api.elasticquery.searchContract(queryBuilder.build());
+
+utils.info("contracts count " + contracts.size());
+
+for (contract : contractData) {
+    entityContract = contractIds.get(contract.getContractId().toString());
+
+    if (entityContract != null) {
+        contractEmployeeId = entityContract.getEmployeeId();
+
+        contractEffectiveDate = NOW_DATE;
+
+        if (entityContract.getBeginDate().isAfter(contractEffectiveDate)) {
+            contractEffectiveDate = entityContract.getBeginDate();
+        }
+
+        if (entityContract.getEndDate().isBefore(contractEffectiveDate)) {
+            contractEffectiveDate = entityContract.getEndDate();
+        }
+
+        if (contract.getBeginDate().compareTo(contractEffectiveDate) <= 0 && contract.getEndDate().compareTo(contractEffectiveDate) >= 0) {
+            addRow(resultList, contract, contractEmployeeId, contractEffectiveDate);
+        }
+    }
+}
+
+EMDdata = new StringBuilder();
+
+for (field : fields) {
+    if (EMDdata.length() != 0) {
+        EMDdata.append(";");
+    }
+
+    EMDdata.append(field[0].toString());
+}
+
+for (row : resultList) {
+    EMDdata.append("\r\n").append(row);
+}
+
+desc.merge("", "ZEEMAN_GLOBEPAY_EMD001_EMD_" + timestamp + ".csv", TXT, null, EMDdata.toString());
+
+
+/**************************************************************************************/
+// REP ENTITY TREES
+/**************************************************************************************/
+
+
+entityTrees = [
+    "JOB" : [
+        "useLocale" : true,
+        "types" : [ "Job" ]
+    ],
+    "DEP" : [
+        "useLocale" : false,
+        "types" : [ "Organization" ]
+    ],
+    "CCD" : [
+        "useLocale" : false,
+        "types" : [ "Establishment" ]
+    ],
+    "CTY" : [
+        "useLocale" : false,
+        "types" : [ "ContractTypologyBE1", "ContractTypologyNL1" ]
+    ],
+    "CSP" : [
+        "useLocale" : false,
+        "types" : [ "ContractTypologyBE5", "ContractTypologyNL5" ]
+    ]
+];
+
+for (key : entityTrees.keySet()) {
+    entityTreeDefinition = entityTrees[key];
+
+    entityTypes = entityTreeDefinition.getOrDefault("types", []);
+    useLocale = entityTreeDefinition.getOrDefault("useLocale", false);
+
+    dataList = getEntityTreeData(entityTypes);
+
+    desc.merge("", "ZEEMAN_GLOBEPAY_EMD001_" + key + "_" + timestamp + ".csv", TXT, null, buildEntityTreeReportData(dataList, useLocale));
+}
+
+
+/**************************************************************************************/
+// REP LISTS
+/**************************************************************************************/
+
+
+lists = [
+    "GDR" : "SEX",
+    "EXI" : "ENDOFCONTRACTREASON",
+    "LNC" : "LASTNAMECOMPOSITION",
+    "SAL" : "CONTRACTPERIOD"
+];
+
+for (key : lists.keySet()) {
+    desc.merge("", "ZEEMAN_GLOBEPAY_EMD001_" + key + "_" + timestamp + ".csv", TXT, null, buildRepListReportData(lists[key]));
+}
