@@ -1,0 +1,2 @@
+rootProject.name = "mvel-linter"
+

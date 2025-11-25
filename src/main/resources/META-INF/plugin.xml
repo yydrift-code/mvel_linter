@@ -1,0 +1,66 @@
+<idea-plugin>
+    <id>com.mvel.linter</id>
+    <name>MVEL Linter</name>
+    <version>1.0.0</version>
+    <vendor email="support@mvel.com" url="https://mvel.documentnode.com/">MVEL</vendor>
+
+    <description><![CDATA[
+    Apache MVEL linter plugin for IntelliJ IDEA.
+    
+    Features:
+    - Syntax highlighting for MVEL expressions
+    - Code inspections and validation
+    - Error detection and reporting
+    - Support for MVEL 2.0 syntax
+    ]]></description>
+
+    <change-notes><![CDATA[
+    Initial release with basic linting capabilities.
+    ]]></change-notes>
+
+    <!-- please see https://plugins.jetbrains.com/docs/intellij/build-number-ranges.html for description -->
+    <idea-version since-build="232" until-build="252.*"/>
+
+    <!-- please see https://plugins.jetbrains.com/docs/intellij/plugin-compatibility.html
+         on how to target different products -->
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.java</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- File Type -->
+        <fileType name="MVEL File" implementationClass="com.mvel.linter.MvelFileType" extensions="mvel" language="MVEL"/>
+        
+        <!-- Language -->
+        <lang.parserDefinition language="MVEL" implementationClass="com.mvel.linter.parser.MvelParserDefinition"/>
+        <lang.lexer language="MVEL" implementationClass="com.mvel.linter.lexer.MvelLexer"/>
+        
+        <!-- Syntax Highlighter -->
+        <colorSettingsPage implementation="com.mvel.linter.highlighter.MvelColorSettingsPage"/>
+        <syntaxHighlighter language="MVEL" implementationClass="com.mvel.linter.highlighter.MvelSyntaxHighlighter"/>
+        <annotator language="MVEL" implementationClass="com.mvel.linter.highlighter.MvelAnnotator"/>
+        
+        <!-- Inspections -->
+        <localInspection language="MVEL" shortName="MvelSyntaxError" 
+                        displayName="MVEL Syntax Error" 
+                        groupName="MVEL" 
+                        enabledByDefault="true"
+                        implementationClass="com.mvel.linter.inspections.MvelSyntaxInspection"/>
+        
+        <localInspection language="MVEL" shortName="MvelTypeError" 
+                        displayName="MVEL Type Error" 
+                        groupName="MVEL" 
+                        enabledByDefault="true"
+                        implementationClass="com.mvel.linter.inspections.MvelTypeInspection"/>
+        
+        <localInspection language="MVEL" shortName="MvelBestPractice" 
+                        displayName="MVEL Best Practice" 
+                        groupName="MVEL" 
+                        enabledByDefault="true"
+                        implementationClass="com.mvel.linter.inspections.MvelBestPracticeInspection"/>
+    </extensions>
+
+    <actions>
+        <!-- Add your actions here -->
+    </actions>
+</idea-plugin>
+

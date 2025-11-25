@@ -1,0 +1,46 @@
+// Sample MVEL expression file
+user.name == 'John Doe'
+
+// Boolean expression with operators
+(user.name == 'John Doe') && ((x * 2) - 1) > 20
+
+// Variable assignment
+a = 10;
+b = (a = a * 2) + 10;
+a
+
+// Inline list
+["Jim", "Bob", "Smith"]
+
+// Inline map
+["Foo" : "Bar", "Bar" : "Foo"]
+
+// Inline array
+{"Jim", "Bob", "Smith"}
+
+// If-else statement
+if (age > 18) {
+    status = 'adult';
+} else {
+    status = 'minor';
+}
+
+// Foreach loop
+foreach (item : items) {
+    result = item.process();
+}
+
+// Function definition
+def calculate(x, y) {
+    return x + y;
+}
+
+// Null-safe navigation
+user?.address?.city
+
+// Empty check
+items == empty
+
+// Null check
+value == null
+
