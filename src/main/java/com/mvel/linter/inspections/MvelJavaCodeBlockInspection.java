@@ -13,12 +13,8 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 public class MvelJavaCodeBlockInspection extends LocalInspectionTool {
-    
-    private static final Pattern CODE_BLOCK_PATTERN = Pattern.compile("@code\\{([^}]*)\\}", Pattern.DOTALL);
     
     @NotNull
     @Override
@@ -39,20 +35,70 @@ public class MvelJavaCodeBlockInspection extends LocalInspectionTool {
             return;
         }
         
-        // Find all @code{} blocks
-        Matcher matcher = CODE_BLOCK_PATTERN.matcher(text);
-        while (matcher.find()) {
-            String codeBlockContent = matcher.group(1);
-            int startOffset = matcher.start(1); // Start of content (after @code{)
-            int endOffset = matcher.end(1);     // End of content (before })
-            
-            if (codeBlockContent != null && !codeBlockContent.trim().isEmpty()) {
-                validateJavaCode(file, codeBlockContent, startOffset, endOffset, holder);
-            }
-        }
+        // Find all @code{} blocks using manual parsing to handle nested braces
+        findAndValidateCodeBlocks(file, text, holder);
         
         // Also check for @code{} blocks in PSI tree
         checkPsiTreeForCodeBlocks(file, holder);
+    }
+    
+    private void findAndValidateCodeBlocks(MvelFile file, String text, ProblemsHolder holder) {
+        int index = 0;
+        while (index < text.length()) {
+            int codeStart = text.indexOf("@code{", index);
+            if (codeStart == -1) {
+                break;
+            }
+            
+            // Find the matching closing brace
+            int braceStart = codeStart + 6; // After "@code{"
+            int braceDepth = 1;
+            int contentStart = braceStart;
+            int contentEnd = -1;
+            
+            for (int i = braceStart; i < text.length(); i++) {
+                char ch = text.charAt(i);
+                if (ch == '{') {
+                    braceDepth++;
+                } else if (ch == '}') {
+                    braceDepth--;
+                    if (braceDepth == 0) {
+                        contentEnd = i;
+                        break;
+                    }
+                }
+            }
+            
+            if (contentEnd == -1) {
+                // Unmatched braces - report error
+                PsiElement element = file.findElementAt(codeStart);
+                if (element != null) {
+                    holder.registerProblem(
+                        element,
+                        "Unmatched braces in @code{} block",
+                        ProblemHighlightType.ERROR
+                    );
+                }
+                break;
+            }
+            
+            String codeContent = text.substring(contentStart, contentEnd);
+            if (codeContent != null && !codeContent.trim().isEmpty()) {
+                validateJavaCode(file, codeContent, contentStart, contentEnd, holder);
+            } else {
+                // Even if empty, we should validate to catch structural issues
+                PsiElement element = file.findElementAt(codeStart);
+                if (element != null) {
+                    holder.registerProblem(
+                        element,
+                        "Empty @code{} block",
+                        ProblemHighlightType.WEAK_WARNING
+                    );
+                }
+            }
+            
+            index = contentEnd + 1;
+        }
     }
     
     private void checkPsiTreeForCodeBlocks(PsiFile file, ProblemsHolder holder) {
@@ -152,7 +198,35 @@ public class MvelJavaCodeBlockInspection extends LocalInspectionTool {
         
         for (JavaSyntaxError error : errors) {
             int errorOffset = startOffset + error.getOffset();
+            
+            // Clamp error offset to valid range
+            if (errorOffset >= file.getTextLength()) {
+                errorOffset = Math.max(0, file.getTextLength() - 1);
+            }
+            if (errorOffset < startOffset) {
+                errorOffset = startOffset;
+            }
+            if (errorOffset > endOffset) {
+                errorOffset = endOffset;
+            }
+            
+            // Try to find element at error location
             PsiElement element = file.findElementAt(errorOffset);
+            
+            // If not found, try nearby positions
+            if (element == null && errorOffset > 0) {
+                element = file.findElementAt(errorOffset - 1);
+            }
+            if (element == null && errorOffset < file.getTextLength() - 1) {
+                element = file.findElementAt(errorOffset + 1);
+            }
+            
+            // If still not found, use element at start of code block
+            if (element == null) {
+                element = file.findElementAt(startOffset);
+            }
+            
+            // Register the problem
             if (element != null) {
                 holder.registerProblem(
                     element,
@@ -160,10 +234,10 @@ public class MvelJavaCodeBlockInspection extends LocalInspectionTool {
                     ProblemHighlightType.ERROR
                 );
             } else {
-                // Fallback: register on the file at the approximate location
+                // Last resort: register on file with offset info
                 holder.registerProblem(
                     file,
-                    "Java code error in @code{} block: " + error.getMessage(),
+                    "Java code error in @code{} block at offset " + errorOffset + ": " + error.getMessage(),
                     ProblemHighlightType.ERROR
                 );
             }
@@ -264,7 +338,7 @@ public class MvelJavaCodeBlockInspection extends LocalInspectionTool {
         List<JavaSyntaxError> errors = new ArrayList<>();
         
         // Split into lines for line-by-line analysis
-        String[] lines = javaCode.split("\n");
+        String[] lines = javaCode.split("\n", -1); // -1 to preserve trailing empty strings
         int currentOffset = 0;
         
         for (int i = 0; i < lines.length; i++) {
@@ -272,8 +346,8 @@ public class MvelJavaCodeBlockInspection extends LocalInspectionTool {
             String trimmed = line.trim();
             
             // Skip empty lines and comments
-            if (trimmed.isEmpty() || trimmed.startsWith("//") || trimmed.startsWith("/*")) {
-                currentOffset += line.length() + 1; // +1 for newline
+            if (trimmed.isEmpty() || trimmed.startsWith("//") || trimmed.startsWith("/*") || trimmed.startsWith("*")) {
+                currentOffset += line.length() + (i < lines.length - 1 ? 1 : 0); // +1 for newline except last line
                 continue;
             }
             
@@ -284,42 +358,45 @@ public class MvelJavaCodeBlockInspection extends LocalInspectionTool {
                 if (i + 1 < lines.length) {
                     String nextLine = lines[i + 1].trim();
                     // Check if it's a continuation (starts with operator, dot, etc.)
-                    if (nextLine.startsWith(".") || nextLine.startsWith("+") || 
+                    if (!nextLine.isEmpty() && (
+                        nextLine.startsWith(".") || nextLine.startsWith("+") || 
                         nextLine.startsWith("-") || nextLine.startsWith("*") || 
                         nextLine.startsWith("/") || nextLine.startsWith("(") ||
-                        nextLine.startsWith("[") || nextLine.startsWith("@")) {
+                        nextLine.startsWith("[") || nextLine.startsWith("@") ||
+                        nextLine.startsWith("++") || nextLine.startsWith("--"))) {
                         isContinued = true;
                     }
-                    // Check if current line ends with an operator that suggests continuation
-                    if (trimmed.endsWith(".") || trimmed.endsWith("+") || 
-                        trimmed.endsWith("-") || trimmed.endsWith("*") || 
-                        trimmed.endsWith("/") || trimmed.endsWith("=") ||
-                        trimmed.endsWith(",")) {
-                        isContinued = true;
-                    }
+                }
+                // Check if current line ends with an operator that suggests continuation
+                if (trimmed.endsWith(".") || trimmed.endsWith("+") || 
+                    trimmed.endsWith("-") || trimmed.endsWith("*") || 
+                    trimmed.endsWith("/") || trimmed.endsWith("=") ||
+                    trimmed.endsWith(",") || trimmed.endsWith("||") ||
+                    trimmed.endsWith("&&") || trimmed.endsWith("?")) {
+                    isContinued = true;
                 }
                 
                 if (!isContinued) {
+                    // Calculate position at end of line (where semicolon should be)
                     int semicolonPos = currentOffset + line.length();
-                    errors.add(new JavaSyntaxError(semicolonPos, "Missing semicolon"));
+                    if (semicolonPos < currentOffset) semicolonPos = currentOffset;
+                    // Make sure we're pointing to a valid position
+                    if (semicolonPos >= 0) {
+                        errors.add(new JavaSyntaxError(semicolonPos, "Missing semicolon"));
+                    }
                 }
             }
-            
-            // Check for unmatched braces
-            int openBraces = countChar(line, '{');
-            int closeBraces = countChar(line, '}');
-            // This is a simplified check - full brace matching would require more context
             
             // Check for common syntax errors
             if (trimmed.endsWith("=") && i + 1 < lines.length) {
                 String nextLine = lines[i + 1].trim();
                 if (nextLine.isEmpty() || nextLine.startsWith("//")) {
-                    errors.add(new JavaSyntaxError(currentOffset + line.length() - 1, 
+                    errors.add(new JavaSyntaxError(currentOffset + line.length(), 
                         "Incomplete assignment statement"));
                 }
             }
             
-            currentOffset += line.length() + 1; // +1 for newline
+            currentOffset += line.length() + (i < lines.length - 1 ? 1 : 0); // +1 for newline except last line
         }
         
         // Check for balanced braces
