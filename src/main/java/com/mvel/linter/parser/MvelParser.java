@@ -74,6 +74,20 @@ public class MvelParser implements PsiParser {
             return false;
         }
         
+        // Handle template syntax first
+        if (token == MvelTokenTypes.TEMPLATE_CODE ||
+            token == MvelTokenTypes.TEMPLATE_IF ||
+            token == MvelTokenTypes.TEMPLATE_ELSE ||
+            token == MvelTokenTypes.TEMPLATE_FOREACH ||
+            token == MvelTokenTypes.TEMPLATE_INCLUDE ||
+            token == MvelTokenTypes.TEMPLATE_INCLUDE_NAMED ||
+            token == MvelTokenTypes.TEMPLATE_COMMENT ||
+            token == MvelTokenTypes.TEMPLATE_DECLARE ||
+            token == MvelTokenTypes.TEMPLATE_END ||
+            token == MvelTokenTypes.AT) {
+            return parseTemplateBlock(builder, depth + 1);
+        }
+        
         // Handle different statement types
         if (token == MvelTokenTypes.IF) {
             return parseIfStatement(builder, depth + 1);
@@ -389,6 +403,101 @@ public class MvelParser implements PsiParser {
                 builder.advanceLexer();
             } else {
                 break;
+            }
+        }
+    }
+
+    private boolean parseTemplateBlock(PsiBuilder builder, int depth) {
+        if (depth > MAX_RECURSION_DEPTH) {
+            if (!builder.eof()) {
+                builder.advanceLexer();
+            }
+            return false;
+        }
+        
+        IElementType token = builder.getTokenType();
+        if (token == null) {
+            return false;
+        }
+        
+        PsiBuilder.Marker marker = builder.mark();
+        
+        // Consume the template token (@code{, @if{, etc.)
+        if (token == MvelTokenTypes.AT) {
+            builder.advanceLexer();
+            // Check if it's @{...} expression orb
+            if (builder.getTokenType() == MvelTokenTypes.LBRACE) {
+                builder.advanceLexer();
+                // Parse content until matching }
+                parseTemplateContent(builder, depth + 1);
+                if (builder.getTokenType() == MvelTokenTypes.RBRACE) {
+                    builder.advanceLexer();
+                }
+            }
+        } else if (token == MvelTokenTypes.TEMPLATE_CODE ||
+                   token == MvelTokenTypes.TEMPLATE_IF ||
+                   token == MvelTokenTypes.TEMPLATE_ELSE ||
+                   token == MvelTokenTypes.TEMPLATE_FOREACH ||
+                   token == MvelTokenTypes.TEMPLATE_INCLUDE ||
+                   token == MvelTokenTypes.TEMPLATE_INCLUDE_NAMED ||
+                   token == MvelTokenTypes.TEMPLATE_DECLARE) {
+            builder.advanceLexer(); // Consume template keyword
+            // The lexer already consumed @code{ or similar, now we need to parse the content
+            // Parse content until matching }
+            parseTemplateContent(builder, depth + 1);
+            if (builder.getTokenType() == MvelTokenTypes.RBRACE) {
+                builder.advanceLexer();
+            }
+        } else if (token == MvelTokenTypes.TEMPLATE_COMMENT) {
+            // Comments don't need parsing
+            builder.advanceLexer();
+            parseTemplateContent(builder, depth + 1);
+            if (builder.getTokenType() == MvelTokenTypes.RBRACE) {
+                builder.advanceLexer();
+            }
+        } else if (token == MvelTokenTypes.TEMPLATE_END) {
+            builder.advanceLexer();
+        } else {
+            marker.drop();
+            return false;
+        }
+        
+        marker.done(MvelTypes.TEMPLATE_BLOCK);
+        return true;
+    }
+    
+    private void parseTemplateContent(PsiBuilder builder, int depth) {
+        if (depth > MAX_RECURSION_DEPTH) {
+            return;
+        }
+        
+        int braceDepth = 1; // We're already inside one brace
+        int iterations = 0;
+        
+        while (!builder.eof() && braceDepth > 0 && iterations < 10000) {
+            iterations++;
+            IElementType token = builder.getTokenType();
+            
+            if (token == MvelTokenTypes.LBRACE) {
+                braceDepth++;
+                builder.advanceLexer();
+            } else if (token == MvelTokenTypes.RBRACE) {
+                braceDepth--;
+                if (braceDepth > 0) {
+                    builder.advanceLexer();
+                } else {
+                    // This is the closing brace for our template block
+                    break;
+                }
+            } else {
+                // Parse as expression or advance
+                IElementType tokenBefore = builder.getTokenType();
+                if (!parseExpression(builder, depth + 1)) {
+                    // If we can't parse, just advance to prevent infinite loop
+                    if (tokenBefore == builder.getTokenType() && !builder.eof()) {
+                        builder.advanceLexer();
+                    }
+                }
             }
         }
     }
