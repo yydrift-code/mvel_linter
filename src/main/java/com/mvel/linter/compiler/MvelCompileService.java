@@ -214,6 +214,7 @@ public final class MvelCompileService {
         }
 
         List<LineInfo> lines = collectSignificantLines(fragmentText, absoluteStartOffset);
+        List<SemicolonCandidate> candidates = new ArrayList<>();
         for (int index = 0; index < lines.size() - 1; index++) {
             LineInfo previous = lines.get(index);
             LineInfo next = lines.get(index + 1);
@@ -222,8 +223,23 @@ public final class MvelCompileService {
                 continue;
             }
 
-            int highlightOffset = clamp(previous.lastNonWhitespaceOffset(), absoluteStartOffset, Math.max(absoluteStartOffset, absoluteEndOffset - 1));
-            int rangeStart = expandStart(fullText, highlightOffset, previous.absoluteStartOffset());
+            candidates.add(new SemicolonCandidate(previous, next));
+        }
+
+        int relativeErrorOffset = resolveRelativeOffset(fragmentText, exception);
+        candidates.sort((left, right) -> compareCandidates(left, right, relativeErrorOffset, absoluteStartOffset));
+
+        for (SemicolonCandidate candidate : candidates) {
+            if (!semicolonInsertionRepairsCompile(fragmentText, candidate.insertRelativeOffset(absoluteStartOffset))) {
+                continue;
+            }
+
+            int highlightOffset = clamp(
+                    candidate.previous().lastNonWhitespaceOffset(),
+                    absoluteStartOffset,
+                    Math.max(absoluteStartOffset, absoluteEndOffset - 1)
+            );
+            int rangeStart = expandStart(fullText, highlightOffset, candidate.previous().absoluteStartOffset());
             int rangeEnd = expandEnd(fullText, highlightOffset, absoluteEndOffset);
 
             return new MvelDiagnostic(
@@ -309,6 +325,40 @@ public final class MvelCompileService {
                 && !line.contains(">=")
                 && !line.contains("<=")
                 && !line.contains("=>");
+    }
+
+    private int compareCandidates(
+            SemicolonCandidate left,
+            SemicolonCandidate right,
+            int relativeErrorOffset,
+            int absoluteStartOffset
+    ) {
+        if (relativeErrorOffset > 0) {
+            int leftDistance = left.distanceTo(relativeErrorOffset, absoluteStartOffset);
+            int rightDistance = right.distanceTo(relativeErrorOffset, absoluteStartOffset);
+            if (leftDistance != rightDistance) {
+                return Integer.compare(leftDistance, rightDistance);
+            }
+        }
+
+        return Integer.compare(
+                right.previous().absoluteStartOffset(),
+                left.previous().absoluteStartOffset()
+        );
+    }
+
+    private boolean semicolonInsertionRepairsCompile(String fragmentText, int insertRelativeOffset) {
+        if (insertRelativeOffset <= 0 || insertRelativeOffset > fragmentText.length()) {
+            return false;
+        }
+
+        String patchedFragment = fragmentText.substring(0, insertRelativeOffset) + ';' + fragmentText.substring(insertRelativeOffset);
+        try {
+            MVEL.compileExpression(patchedFragment);
+            return true;
+        } catch (RuntimeException ignored) {
+            return false;
+        }
     }
 
     private boolean looksLikeSemicolonRelatedFailure(String sanitizedMessage, CompileException exception) {
@@ -490,5 +540,23 @@ public final class MvelCompileService {
     }
 
     private record LineInfo(String text, int absoluteStartOffset, int lastNonWhitespaceOffset) {
+    }
+
+    private record SemicolonCandidate(LineInfo previous, LineInfo next) {
+        int insertRelativeOffset(int absoluteStartOffset) {
+            return previous.lastNonWhitespaceOffset() - absoluteStartOffset + 1;
+        }
+
+        int distanceTo(int relativeErrorOffset, int absoluteStartOffset) {
+            int candidateStart = previous.absoluteStartOffset() - absoluteStartOffset;
+            int candidateEnd = next.lastNonWhitespaceOffset() - absoluteStartOffset;
+            if (relativeErrorOffset < candidateStart) {
+                return candidateStart - relativeErrorOffset;
+            }
+            if (relativeErrorOffset > candidateEnd) {
+                return relativeErrorOffset - candidateEnd;
+            }
+            return 0;
+        }
     }
 }

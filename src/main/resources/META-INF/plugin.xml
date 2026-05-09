@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>com.mvel.linter</id>
     <name>MVEL Linter</name>
-    <version>1.0.0</version>
+    <version>1.0.3</version>
     <vendor email="support@mvel.com" url="https://mvel.documentnode.com/">MVEL</vendor>
 
     <description><![CDATA[
@@ -15,7 +15,7 @@
     ]]></description>
 
     <change-notes><![CDATA[
-    Initial release with basic linting capabilities.
+    1.0.3: fixed false positive statement separator warnings inside nested collection literals.
     ]]></change-notes>
 
     <!-- please see https://plugins.jetbrains.com/docs/intellij/build-number-ranges.html for description -->
@@ -63,6 +63,12 @@
                         groupName="MVEL" 
                         enabledByDefault="true"
                         implementationClass="com.mvel.linter.inspections.MvelJavaCodeBlockInspection"/>
+
+        <localInspection language="MVEL" shortName="MvelStatementSeparator"
+                        displayName="MVEL Statement Separator Validation"
+                        groupName="MVEL"
+                        enabledByDefault="true"
+                        implementationClass="com.mvel.linter.inspections.MvelStatementSeparatorInspection"/>
     </extensions>
 
     <actions>

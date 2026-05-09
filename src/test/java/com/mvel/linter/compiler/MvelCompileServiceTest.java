@@ -9,6 +9,7 @@ import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 public class MvelCompileServiceTest {
@@ -56,6 +57,21 @@ public class MvelCompileServiceTest {
         assertEquals("Possible missing ';'", diagnostic.message());
         assertEquals(MvelDiagnostic.SourceKind.CODE_BLOCK, diagnostic.sourceKind());
         assertTrue(diagnostic.startOffset() > text.indexOf("@code{"));
+    }
+
+    @Test
+    public void semicolonHintDoesNotMaskOtherErrorsInLargeCodeBlock() {
+        String text = "@code{\n"
+                + "    positionId = foo\n"
+                + "    if (x) { return y; }\n"
+                + "    bar = )\n"
+                + "}\n";
+
+        MvelDiagnostic diagnostic = singleDiagnostic(text);
+
+        assertNotEquals("Possible missing ';'", diagnostic.message());
+        assertEquals(MvelDiagnostic.SourceKind.CODE_BLOCK, diagnostic.sourceKind());
+        assertTrue(diagnostic.startOffset() >= text.indexOf("bar"));
     }
 
     @Test
