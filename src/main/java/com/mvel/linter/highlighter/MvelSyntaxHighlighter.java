@@ -23,6 +23,8 @@ public class MvelSyntaxHighlighter extends SyntaxHighlighterBase {
         createTextAttributesKey("MVEL_OPERATOR", DefaultLanguageHighlighterColors.OPERATION_SIGN);
     public static final TextAttributesKey IDENTIFIER =
         createTextAttributesKey("MVEL_IDENTIFIER", DefaultLanguageHighlighterColors.IDENTIFIER);
+    public static final TextAttributesKey TYPE_NAME =
+        createTextAttributesKey("MVEL_TYPE_NAME", DefaultLanguageHighlighterColors.CLASS_NAME);
     public static final TextAttributesKey COMMENT =
         createTextAttributesKey("MVEL_COMMENT", DefaultLanguageHighlighterColors.LINE_COMMENT);
     public static final TextAttributesKey BRACKETS =
@@ -45,6 +47,7 @@ public class MvelSyntaxHighlighter extends SyntaxHighlighterBase {
     private static final TextAttributesKey[] NUMBER_KEYS = new TextAttributesKey[]{NUMBER};
     private static final TextAttributesKey[] OPERATOR_KEYS = new TextAttributesKey[]{OPERATOR};
     private static final TextAttributesKey[] IDENTIFIER_KEYS = new TextAttributesKey[]{IDENTIFIER};
+    private static final TextAttributesKey[] TYPE_KEYS = new TextAttributesKey[]{TYPE_NAME};
     private static final TextAttributesKey[] COMMENT_KEYS = new TextAttributesKey[]{COMMENT};
     private static final TextAttributesKey[] BRACKET_KEYS = new TextAttributesKey[]{BRACKETS};
     private static final TextAttributesKey[] BRACE_KEYS = new TextAttributesKey[]{BRACES};
@@ -54,6 +57,10 @@ public class MvelSyntaxHighlighter extends SyntaxHighlighterBase {
     private static final TextAttributesKey[] SEMICOLON_KEYS = new TextAttributesKey[]{SEMICOLON};
     private static final TextAttributesKey[] TEMPLATE_TAG_KEYS = new TextAttributesKey[]{TEMPLATE_TAG};
     private static final TextAttributesKey[] EMPTY_KEYS = new TextAttributesKey[0];
+
+    public static TextAttributesKey[] typeKeys() {
+        return TYPE_KEYS;
+    }
 
     @NotNull
     @Override
@@ -146,4 +153,3 @@ public class MvelSyntaxHighlighter extends SyntaxHighlighterBase {
         return EMPTY_KEYS;
     }
 }
-

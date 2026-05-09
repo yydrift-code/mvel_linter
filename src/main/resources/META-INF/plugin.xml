@@ -19,7 +19,7 @@
     ]]></change-notes>
 
     <!-- please see https://plugins.jetbrains.com/docs/intellij/build-number-ranges.html for description -->
-    <idea-version since-build="232" until-build="252.*"/>
+    <idea-version since-build="242" until-build="252.*"/>
 
     <!-- please see https://plugins.jetbrains.com/docs/intellij/plugin-compatibility.html
          on how to target different products -->
@@ -59,7 +59,7 @@
                         implementationClass="com.mvel.linter.inspections.MvelBestPracticeInspection"/>
         
         <localInspection language="MVEL" shortName="MvelJavaCodeBlock" 
-                        displayName="MVEL Java Code Block Validation" 
+                        displayName="MVEL Template Code Block Validation" 
                         groupName="MVEL" 
                         enabledByDefault="true"
                         implementationClass="com.mvel.linter.inspections.MvelJavaCodeBlockInspection"/>
@@ -69,4 +69,3 @@
         <!-- Add your actions here -->
     </actions>
 </idea-plugin>
-

@@ -1,6 +1,5 @@
 plugins {
     id("java")
-    id("org.jetbrains.kotlin.jvm") version "1.9.20"
     id("org.jetbrains.intellij") version "1.16.0"
 }
 
@@ -22,13 +21,9 @@ tasks {
         sourceCompatibility = "17"
         targetCompatibility = "17"
     }
-    
-    withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-        kotlinOptions.jvmTarget = "17"
-    }
 
     patchPluginXml {
-        sinceBuild.set("232")
+        sinceBuild.set("242")
         untilBuild.set("252.*")
     }
 
@@ -44,6 +39,7 @@ tasks {
 }
 
 dependencies {
-    implementation("org.mvel:mvel2:2.4.14.Final")
+    implementation("org.mvel:mvel2:2.5.2.Final")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.opentest4j:opentest4j:1.3.0")
 }
-

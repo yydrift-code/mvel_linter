@@ -1,25 +1,23 @@
 package com.mvel.linter.inspections;
 
-import com.intellij.codeInspection.*;
+import com.intellij.codeInspection.LocalInspectionTool;
+import com.intellij.codeInspection.ProblemHighlightType;
+import com.intellij.codeInspection.ProblemsHolder;
+import com.intellij.openapi.util.TextRange;
 import com.intellij.psi.PsiElementVisitor;
+import com.intellij.psi.PsiFile;
+import com.mvel.linter.compiler.MvelCompileService;
+import com.mvel.linter.compiler.MvelDiagnostic;
 import com.mvel.linter.psi.MvelFile;
 import org.jetbrains.annotations.NotNull;
-import org.mvel2.MVEL;
-
-import java.util.HashMap;
-import java.util.Map;
 
 public class MvelSyntaxInspection extends LocalInspectionTool {
-    // Reuse empty context to avoid creating new HashMap for each inspection
-    // This is safe because MVEL.eval() doesn't modify the context
-    private static final Map<String, Object> EMPTY_CONTEXT = new HashMap<>();
-    
     @NotNull
     @Override
     public PsiElementVisitor buildVisitor(@NotNull ProblemsHolder holder, boolean isOnTheFly) {
         return new PsiElementVisitor() {
             @Override
-            public void visitFile(@NotNull com.intellij.psi.PsiFile file) {
+            public void visitFile(@NotNull PsiFile file) {
                 if (file instanceof MvelFile) {
                     checkMvelSyntax((MvelFile) file, holder);
                 }
@@ -28,46 +26,28 @@ public class MvelSyntaxInspection extends LocalInspectionTool {
     }
 
     private void checkMvelSyntax(MvelFile file, ProblemsHolder holder) {
-        String text = file.getText();
-        if (text == null || text.trim().isEmpty()) {
-            return;
-        }
-
-        try {
-            // Use MVEL's interpreter mode instead of compiler mode
-            // This doesn't require Java's Compiler API which isn't available in IntelliJ plugins
-            // Reuse EMPTY_CONTEXT to avoid creating new HashMap instances
-            MVEL.eval(text, EMPTY_CONTEXT);
-            
-            // If evaluation succeeds, there are no syntax errors
-        } catch (NoClassDefFoundError | ExceptionInInitializerError e) {
-            // MVEL compiler classes not available - skip inspection
-            // This happens when Java's Compiler API is not available
-            return;
-        } catch (org.mvel2.CompileException e) {
-            // Syntax error detected
-            String message = e.getMessage();
-            if (message == null || message.isEmpty()) {
-                message = "MVEL syntax error: " + e.getClass().getSimpleName();
+        MvelCompileService compileService = MvelCompileService.getInstance(file.getProject());
+        for (MvelDiagnostic diagnostic : compileService.getCompileResult(file).diagnostics()) {
+            if (diagnostic.sourceKind() == MvelDiagnostic.SourceKind.CODE_BLOCK) {
+                continue;
             }
-            
-            holder.registerProblem(
-                file,
-                message,
-                ProblemHighlightType.ERROR
-            );
-        } catch (Exception e) {
-            // Other errors - might be runtime errors, not syntax errors
-            // Only report if it's clearly a syntax issue
-            String message = e.getMessage();
-            if (message != null && (message.contains("syntax") || message.contains("parse") || message.contains("unexpected"))) {
-                holder.registerProblem(
-                    file,
-                    "MVEL syntax error: " + message,
-                    ProblemHighlightType.ERROR
-                );
-            }
+            registerDiagnostic(file, holder, diagnostic);
         }
     }
-}
 
+    private void registerDiagnostic(MvelFile file, ProblemsHolder holder, MvelDiagnostic diagnostic) {
+        TextRange range = diagnostic.toTextRange(file.getTextLength());
+        if (range.isEmpty()) {
+            return;
+        }
+
+        holder.registerProblem(
+                file,
+                diagnostic.message(),
+                diagnostic.severity() == MvelDiagnostic.Severity.WARNING
+                        ? ProblemHighlightType.GENERIC_ERROR_OR_WARNING
+                        : ProblemHighlightType.ERROR,
+                range
+        );
+    }
+}

@@ -10,7 +10,13 @@ import com.mvel.linter.lexer.MvelTokenTypes;
 import com.mvel.linter.psi.MvelFile;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.Set;
+
 public class MvelAnnotator implements Annotator {
+    private static final Set<String> PRIMITIVE_TYPE_NAMES = Set.of(
+            "byte", "short", "int", "long", "float", "double", "boolean", "char", "void"
+    );
+
     @Override
     public void annotate(@NotNull PsiElement element, @NotNull AnnotationHolder holder) {
         // Only process MVEL files
@@ -50,10 +56,23 @@ public class MvelAnnotator implements Annotator {
                 .textAttributes(MvelSyntaxHighlighter.NUMBER)
                 .create();
         } else if (elementType == MvelTokenTypes.IDENTIFIER) {
-            holder.newSilentAnnotation(HighlightSeverity.INFORMATION)
-                .range(element)
-                .textAttributes(MvelSyntaxHighlighter.IDENTIFIER)
-                .create();
+            String text = element.getText();
+            if ("import".equals(text) || ("class".equals(text) && isClassLiteral(element))) {
+                holder.newSilentAnnotation(HighlightSeverity.INFORMATION)
+                    .range(element)
+                    .textAttributes(MvelSyntaxHighlighter.KEYWORD)
+                    .create();
+            } else if (looksLikeTypeName(element)) {
+                holder.newSilentAnnotation(HighlightSeverity.INFORMATION)
+                    .range(element)
+                    .textAttributes(MvelSyntaxHighlighter.TYPE_NAME)
+                    .create();
+            } else {
+                holder.newSilentAnnotation(HighlightSeverity.INFORMATION)
+                    .range(element)
+                    .textAttributes(MvelSyntaxHighlighter.IDENTIFIER)
+                    .create();
+            }
         } else if (elementType == MvelTokenTypes.LINE_COMMENT ||
                    elementType == MvelTokenTypes.COMMENT) {
             holder.newSilentAnnotation(HighlightSeverity.INFORMATION)
@@ -95,5 +114,40 @@ public class MvelAnnotator implements Annotator {
                 .create();
         }
     }
-}
 
+    private boolean isClassLiteral(PsiElement element) {
+        PsiElement previousVisibleLeaf = PsiTreeUtil.prevVisibleLeaf(element);
+        return previousVisibleLeaf != null
+                && previousVisibleLeaf.getNode() != null
+                && previousVisibleLeaf.getNode().getElementType() == MvelTokenTypes.DOT;
+    }
+
+    private boolean looksLikeTypeName(PsiElement element) {
+        String text = element.getText();
+        if (text == null || text.isEmpty()) {
+            return false;
+        }
+
+        if (PRIMITIVE_TYPE_NAMES.contains(text)) {
+            return true;
+        }
+
+        PsiElement previousVisibleLeaf = PsiTreeUtil.prevVisibleLeaf(element);
+        if (previousVisibleLeaf != null && "new".equals(previousVisibleLeaf.getText())) {
+            return true;
+        }
+
+        PsiElement nextVisibleLeaf = PsiTreeUtil.nextVisibleLeaf(element);
+        if (nextVisibleLeaf != null && nextVisibleLeaf.getNode() != null) {
+            IElementType nextType = nextVisibleLeaf.getNode().getElementType();
+            if (nextType == MvelTokenTypes.IDENTIFIER && Character.isUpperCase(text.charAt(0))) {
+                return true;
+            }
+            if (nextType == MvelTokenTypes.DOT && "import".equals(previousVisibleLeaf != null ? previousVisibleLeaf.getText() : null)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+}

@@ -18,6 +18,7 @@ public class MvelColorSettingsPage implements ColorSettingsPage {
         new AttributesDescriptor("String", MvelSyntaxHighlighter.STRING),
         new AttributesDescriptor("Number", MvelSyntaxHighlighter.NUMBER),
         new AttributesDescriptor("Identifier", MvelSyntaxHighlighter.IDENTIFIER),
+        new AttributesDescriptor("Type name", MvelSyntaxHighlighter.TYPE_NAME),
         new AttributesDescriptor("Operator", MvelSyntaxHighlighter.OPERATOR),
         new AttributesDescriptor("Comment", MvelSyntaxHighlighter.COMMENT),
         new AttributesDescriptor("Brackets", MvelSyntaxHighlighter.BRACKETS),
@@ -41,7 +42,9 @@ public class MvelColorSettingsPage implements ColorSettingsPage {
     @Override
     public String getDemoText() {
         return "// MVEL Example\n" +
+               "import java.util.List;\n" +
                "user.name == 'John Doe'\n" +
+               "String title = MyReport.class.name;\n" +
                "if (age > 18) {\n" +
                "    status = 'adult';\n" +
                "} else {\n" +
@@ -76,4 +79,3 @@ public class MvelColorSettingsPage implements ColorSettingsPage {
         return "MVEL";
     }
 }
-
