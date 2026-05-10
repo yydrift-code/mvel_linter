@@ -24,6 +24,10 @@ public class MvelTypes {
     public static class Factory {
         public static com.intellij.psi.PsiElement createElement(com.intellij.lang.ASTNode node) {
             IElementType type = node.getElementType();
+
+            if (type == com.mvel.linter.lexer.MvelTokenTypes.CODE_BLOCK_TEXT) {
+                return new com.mvel.linter.psi.impl.MvelCodeBlockTextPsi(node);
+            }
             
             // For leaf nodes (tokens), return null to use default token PSI
             // This allows the syntax highlighter to work directly with tokens
@@ -32,13 +36,16 @@ public class MvelTypes {
             }
             
             // For non-leaf nodes (expressions, statements), create custom PSI elements
+            if (type == TEMPLATE_BLOCK) {
+                return new com.mvel.linter.psi.impl.MvelTemplateBlockImpl(node);
+            }
+
             if (type == EXPRESSION || type == STATEMENT || type == IF_STATEMENT ||
                 type == FOR_STATEMENT || type == WHILE_STATEMENT || type == RETURN_STATEMENT ||
-                type == FUNCTION_DEFINITION || type == ASSIGNMENT || type == TEMPLATE_BLOCK) {
+                type == FUNCTION_DEFINITION || type == ASSIGNMENT) {
                 return new com.mvel.linter.psi.impl.MvelExpressionImpl(node);
             }
             return new com.mvel.linter.psi.impl.MvelElementImpl(node);
         }
     }
 }
-

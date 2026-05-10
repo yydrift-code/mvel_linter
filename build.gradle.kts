@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "com.mvel"
-version = "1.0.3"
+version = "1.1.4"
 
 repositories {
     mavenCentral()

@@ -392,6 +392,10 @@ public final class MvelCompileService {
                 || lowerCaseMessage.contains("unbalanced braces");
 
         TemplateCodeBlockScanner.TemplateFragment owner = findOwner(fragments, templateDiagnostic.startOffset());
+        if (owner != null && owner.kind() == MvelDiagnostic.SourceKind.CODE_BLOCK) {
+            return true;
+        }
+
         if (!structural && owner != null) {
             return diagnostics.stream().anyMatch(existing ->
                     existing.sourceKind() == owner.kind()

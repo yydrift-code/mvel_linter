@@ -422,7 +422,8 @@ public class MvelParser implements PsiParser {
         
         PsiBuilder.Marker marker = builder.mark();
         
-        // Consume the template token (@code{, @if{, etc.)
+        // Consume the template token (`@code`, `@if`, etc.) and then the normal `{`
+        // so brace-aware editor features operate on real brace tokens.
         if (token == MvelTokenTypes.AT) {
             builder.advanceLexer();
             // Check if it's @{...} expression orb
@@ -442,21 +443,30 @@ public class MvelParser implements PsiParser {
                    token == MvelTokenTypes.TEMPLATE_INCLUDE_NAMED ||
                    token == MvelTokenTypes.TEMPLATE_DECLARE) {
             builder.advanceLexer(); // Consume template keyword
-            // The lexer already consumed @code{ or similar, now we need to parse the content
-            // Parse content until matching }
-            parseTemplateContent(builder, depth + 1);
-            if (builder.getTokenType() == MvelTokenTypes.RBRACE) {
+            if (builder.getTokenType() == MvelTokenTypes.LBRACE) {
                 builder.advanceLexer();
+                parseTemplateContent(builder, depth + 1);
+                if (builder.getTokenType() == MvelTokenTypes.RBRACE) {
+                    builder.advanceLexer();
+                }
             }
         } else if (token == MvelTokenTypes.TEMPLATE_COMMENT) {
-            // Comments don't need parsing
             builder.advanceLexer();
-            parseTemplateContent(builder, depth + 1);
-            if (builder.getTokenType() == MvelTokenTypes.RBRACE) {
+            if (builder.getTokenType() == MvelTokenTypes.LBRACE) {
                 builder.advanceLexer();
+                parseTemplateContent(builder, depth + 1);
+                if (builder.getTokenType() == MvelTokenTypes.RBRACE) {
+                    builder.advanceLexer();
+                }
             }
         } else if (token == MvelTokenTypes.TEMPLATE_END) {
             builder.advanceLexer();
+            if (builder.getTokenType() == MvelTokenTypes.LBRACE) {
+                builder.advanceLexer();
+                if (builder.getTokenType() == MvelTokenTypes.RBRACE) {
+                    builder.advanceLexer();
+                }
+            }
         } else {
             marker.drop();
             return false;
@@ -518,4 +528,3 @@ public class MvelParser implements PsiParser {
                token == MvelTokenTypes.OR;
     }
 }
-

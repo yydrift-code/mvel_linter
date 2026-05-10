@@ -6,6 +6,7 @@ import com.intellij.lang.annotation.HighlightSeverity;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.tree.IElementType;
 import com.intellij.psi.util.PsiTreeUtil;
+import com.mvel.linter.codeblock.MvelCodeBlockSupport;
 import com.mvel.linter.lexer.MvelTokenTypes;
 import com.mvel.linter.psi.MvelFile;
 import org.jetbrains.annotations.NotNull;
@@ -21,6 +22,10 @@ public class MvelAnnotator implements Annotator {
     public void annotate(@NotNull PsiElement element, @NotNull AnnotationHolder holder) {
         // Only process MVEL files
         if (!(element.getContainingFile() instanceof MvelFile)) {
+            return;
+        }
+
+        if (MvelCodeBlockSupport.isInsideJavaCodeBlockContent(element)) {
             return;
         }
 

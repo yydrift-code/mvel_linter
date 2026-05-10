@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>com.mvel.linter</id>
     <name>MVEL Linter</name>
-    <version>1.0.3</version>
+    <version>1.1.4</version>
     <vendor email="support@mvel.com" url="https://mvel.documentnode.com/">MVEL</vendor>
 
     <description><![CDATA[
@@ -15,7 +15,7 @@
     ]]></description>
 
     <change-notes><![CDATA[
-    1.0.3: fixed false positive statement separator warnings inside nested collection literals.
+    1.1.4: disabled the unstable Java injection path in `@code{}` and restored stable token-level highlighting, inspections, brace handling, and navigation inside code blocks.
     ]]></change-notes>
 
     <!-- please see https://plugins.jetbrains.com/docs/intellij/build-number-ranges.html for description -->
@@ -28,16 +28,23 @@
 
     <extensions defaultExtensionNs="com.intellij">
         <!-- File Type -->
-        <fileType name="MVEL File" implementationClass="com.mvel.linter.MvelFileType" extensions="mvel" language="MVEL"/>
+        <fileType name="MVEL File" implementationClass="com.mvel.linter.MvelFileType" fieldName="INSTANCE" extensions="mvel" language="MVEL"/>
+        <braceMatcher filetype="MVEL File" implementationClass="com.mvel.linter.MvelFileTypeBraceMatcher"/>
         
         <!-- Language -->
         <lang.parserDefinition language="MVEL" implementationClass="com.mvel.linter.parser.MvelParserDefinition"/>
         <lang.lexer language="MVEL" implementationClass="com.mvel.linter.lexer.MvelLexer"/>
+        <lang.braceMatcher language="MVEL" implementationClass="com.mvel.linter.MvelBraceMatcher"/>
+        <lang.commenter language="MVEL" implementationClass="com.mvel.linter.MvelCommenter"/>
         
         <!-- Syntax Highlighter -->
         <colorSettingsPage implementation="com.mvel.linter.highlighter.MvelColorSettingsPage"/>
         <syntaxHighlighter language="MVEL" implementationClass="com.mvel.linter.highlighter.MvelSyntaxHighlighter"/>
         <annotator language="MVEL" implementationClass="com.mvel.linter.highlighter.MvelAnnotator"/>
+        <psi.referenceContributor language="MVEL" implementation="com.mvel.linter.references.MvelMethodReferenceContributor"/>
+        <gotoDeclarationHandler implementation="com.mvel.linter.navigation.MvelGotoDeclarationHandler"/>
+        <typedHandler implementation="com.mvel.linter.editor.MvelTypedHandler"/>
+        <enterHandlerDelegate implementation="com.mvel.linter.editor.MvelEnterHandler"/>
         
         <!-- Inspections -->
         <localInspection language="MVEL" shortName="MvelSyntaxError" 

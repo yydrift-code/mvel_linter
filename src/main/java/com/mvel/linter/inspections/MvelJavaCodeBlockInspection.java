@@ -26,8 +26,7 @@ public class MvelJavaCodeBlockInspection extends LocalInspectionTool {
     }
 
     private void checkCodeBlocks(MvelFile file, ProblemsHolder holder) {
-        MvelCompileService compileService = MvelCompileService.getInstance(file.getProject());
-        for (MvelDiagnostic diagnostic : compileService.getCompileResult(file).diagnostics()) {
+        for (MvelDiagnostic diagnostic : MvelCompileService.getInstance(file.getProject()).getCompileResult(file).diagnostics()) {
             if (diagnostic.sourceKind() != MvelDiagnostic.SourceKind.CODE_BLOCK) {
                 continue;
             }

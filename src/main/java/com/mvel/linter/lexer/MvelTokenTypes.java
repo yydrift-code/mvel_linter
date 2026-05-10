@@ -52,6 +52,7 @@ public class MvelTokenTypes {
     public static final IElementType TEMPLATE_ELSE = new MvelElementType("TEMPLATE_ELSE");
     public static final IElementType TEMPLATE_END = new MvelElementType("TEMPLATE_END");
     public static final IElementType TEMPLATE_DECLARE = new MvelElementType("TEMPLATE_DECLARE");
+    public static final IElementType CODE_BLOCK_TEXT = new MvelElementType("CODE_BLOCK_TEXT");
     
     // Keywords
     public static final IElementType IF = new MvelElementType("IF");
@@ -80,4 +81,3 @@ public class MvelTokenTypes {
         }
     }
 }
-

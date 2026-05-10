@@ -1,6 +1,7 @@
 package com.mvel.linter.lexer;
 
 import com.intellij.lexer.LexerBase;
+import com.intellij.psi.TokenType;
 import com.intellij.psi.tree.IElementType;
 import com.mvel.linter.MvelLanguage;
 
@@ -15,7 +16,6 @@ public class MvelLexer extends LexerBase {
     private IElementType tokenType;
     private int tokenStart;
     private int tokenEnd;
-
     private static final Pattern IDENTIFIER_PATTERN = Pattern.compile("^[a-zA-Z_$][a-zA-Z0-9_$]*");
     private static final Pattern NUMBER_PATTERN = Pattern.compile("^(?:\\d+\\.?\\d*|\\.\\d+)(?:[eE][+-]?\\d+)?[fFdDlL]?");
     private static final Pattern STRING_PATTERN = Pattern.compile("^\"(?:[^\"\\\\]|\\\\.)*\"|^'(?:[^'\\\\]|\\\\.)*'");
@@ -151,7 +151,7 @@ public class MvelLexer extends LexerBase {
                     tokenType = MvelTokenTypes.AND;
                     tokenEnd = currentOffset + 2;
                 } else {
-                    tokenType = null; // Error
+                    tokenType = TokenType.BAD_CHARACTER;
                     tokenEnd = currentOffset + 1;
                 }
                 break;
@@ -160,7 +160,7 @@ public class MvelLexer extends LexerBase {
                     tokenType = MvelTokenTypes.OR;
                     tokenEnd = currentOffset + 2;
                 } else {
-                    tokenType = null; // Error
+                    tokenType = TokenType.BAD_CHARACTER;
                     tokenEnd = currentOffset + 1;
                 }
                 break;
@@ -229,44 +229,37 @@ public class MvelLexer extends LexerBase {
                 tokenEnd = currentOffset + 1;
                 break;
             case '@':
-                // Handle MVEL template syntax: @{}, @code{}, @comment{}, etc.
-                if (remaining.length() > 1 && remaining.charAt(1) == '{') {
-                    // Check for template keywords
-                    String remainingStr = remaining.toString();
-                    if (remainingStr.startsWith("@comment{")) {
-                        tokenType = MvelTokenTypes.TEMPLATE_COMMENT;
-                        tokenEnd = currentOffset + 9; // "@comment{".length()
-                    } else if (remainingStr.startsWith("@code{")) {
-                        tokenType = MvelTokenTypes.TEMPLATE_CODE;
-                        tokenEnd = currentOffset + 6; // "@code{".length()
-                    } else if (remainingStr.startsWith("@includeNamed{")) {
-                        tokenType = MvelTokenTypes.TEMPLATE_INCLUDE_NAMED;
-                        tokenEnd = currentOffset + 15; // "@includeNamed{".length()
-                    } else if (remainingStr.startsWith("@include{")) {
-                        tokenType = MvelTokenTypes.TEMPLATE_INCLUDE;
-                        tokenEnd = currentOffset + 9; // "@include{".length()
-                    } else if (remainingStr.startsWith("@foreach{")) {
-                        tokenType = MvelTokenTypes.TEMPLATE_FOREACH;
-                        tokenEnd = currentOffset + 10; // "@foreach{".length()
-                    } else if (remainingStr.startsWith("@if{")) {
-                        tokenType = MvelTokenTypes.TEMPLATE_IF;
-                        tokenEnd = currentOffset + 4; // "@if{".length()
-                    } else if (remainingStr.startsWith("@else{")) {
-                        tokenType = MvelTokenTypes.TEMPLATE_ELSE;
-                        tokenEnd = currentOffset + 6; // "@else{".length()
-                    } else if (remainingStr.startsWith("@end{")) {
-                        tokenType = MvelTokenTypes.TEMPLATE_END;
-                        tokenEnd = currentOffset + 5; // "@end{".length()
-                    } else if (remainingStr.startsWith("@declare{")) {
-                        tokenType = MvelTokenTypes.TEMPLATE_DECLARE;
-                        tokenEnd = currentOffset + 9; // "@declare{".length()
-                    } else {
-                        // Simple expression orb: @{...}
-                        tokenType = MvelTokenTypes.AT;
-                        tokenEnd = currentOffset + 1;
-                    }
+                // Keep the template keyword and the opening brace as separate tokens so
+                // editor brace matching sees the real `{` / `}` balance in template-heavy files.
+                String remainingStr = remaining.toString();
+                if (remainingStr.startsWith("@comment{")) {
+                    tokenType = MvelTokenTypes.TEMPLATE_COMMENT;
+                    tokenEnd = currentOffset + 8; // "@comment".length()
+                } else if (remainingStr.startsWith("@code{")) {
+                    tokenType = MvelTokenTypes.TEMPLATE_CODE;
+                    tokenEnd = currentOffset + 5; // "@code".length()
+                } else if (remainingStr.startsWith("@includeNamed{")) {
+                    tokenType = MvelTokenTypes.TEMPLATE_INCLUDE_NAMED;
+                    tokenEnd = currentOffset + 13; // "@includeNamed".length()
+                } else if (remainingStr.startsWith("@include{")) {
+                    tokenType = MvelTokenTypes.TEMPLATE_INCLUDE;
+                    tokenEnd = currentOffset + 8; // "@include".length()
+                } else if (remainingStr.startsWith("@foreach{")) {
+                    tokenType = MvelTokenTypes.TEMPLATE_FOREACH;
+                    tokenEnd = currentOffset + 8; // "@foreach".length()
+                } else if (remainingStr.startsWith("@if{")) {
+                    tokenType = MvelTokenTypes.TEMPLATE_IF;
+                    tokenEnd = currentOffset + 3; // "@if".length()
+                } else if (remainingStr.startsWith("@else{")) {
+                    tokenType = MvelTokenTypes.TEMPLATE_ELSE;
+                    tokenEnd = currentOffset + 5; // "@else".length()
+                } else if (remainingStr.startsWith("@end{")) {
+                    tokenType = MvelTokenTypes.TEMPLATE_END;
+                    tokenEnd = currentOffset + 4; // "@end".length()
+                } else if (remainingStr.startsWith("@declare{")) {
+                    tokenType = MvelTokenTypes.TEMPLATE_DECLARE;
+                    tokenEnd = currentOffset + 8; // "@declare".length()
                 } else {
-                    // Just @ symbol
                     tokenType = MvelTokenTypes.AT;
                     tokenEnd = currentOffset + 1;
                 }
@@ -282,8 +275,8 @@ public class MvelLexer extends LexerBase {
                     }
                     tokenEnd = currentOffset + idMatcher.end();
                 } else {
-                    // Unknown character
-                    tokenType = null;
+                    // Keep lexing after unknown characters so editor features continue to work.
+                    tokenType = TokenType.BAD_CHARACTER;
                     tokenEnd = currentOffset + 1;
                 }
                 break;
@@ -292,7 +285,7 @@ public class MvelLexer extends LexerBase {
         // Safety check: ensure we always advance to prevent infinite loops
         if (tokenEnd <= currentOffset) {
             tokenEnd = currentOffset + 1;
-            tokenType = null; // Mark as error token
+            tokenType = TokenType.BAD_CHARACTER;
         }
         
         currentOffset = tokenEnd;
@@ -332,5 +325,40 @@ public class MvelLexer extends LexerBase {
     public int getBufferEnd() {
         return endOffset;
     }
-}
 
+    private int skipQuotedString(int offset) {
+        char quote = buffer.charAt(offset);
+        int index = offset + 1;
+        while (index < endOffset) {
+            char current = buffer.charAt(index);
+            if (current == '\\' && index + 1 < endOffset) {
+                index += 2;
+                continue;
+            }
+            if (current == quote) {
+                return index + 1;
+            }
+            index++;
+        }
+        return endOffset;
+    }
+
+    private int skipLineComment(int offset) {
+        int index = offset + 2;
+        while (index < endOffset && buffer.charAt(index) != '\n') {
+            index++;
+        }
+        return index;
+    }
+
+    private int skipBlockComment(int offset) {
+        int index = offset + 2;
+        while (index + 1 < endOffset) {
+            if (buffer.charAt(index) == '*' && buffer.charAt(index + 1) == '/') {
+                return index + 2;
+            }
+            index++;
+        }
+        return endOffset;
+    }
+}
